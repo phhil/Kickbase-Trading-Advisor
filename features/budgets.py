@@ -25,15 +25,21 @@ def calc_manager_budgets(token, league_id, league_start_date, start_budget):
     total_login_bonus = sum(entry.get("data", {}).get("bn", 0) for entry in login_bonus)
 
     total_achievement_bonus = 0
+    skipped_achievements = 0
     for item in achievement_bonus:
         try:
             a_id = item.get("data", {}).get("t")
             if a_id is None:
                 continue
             amount, reward = get_achievement_reward(token, league_id, a_id)
+            if amount is None or reward is None:
+                skipped_achievements += 1
+                continue
             total_achievement_bonus += amount * reward
-        except Exception as e:
-            print(f"Warning: Failed to process achievement bonus {item}: {e}")
+        except Exception:
+            skipped_achievements += 1
+    if skipped_achievements > 0:
+        print(f"Skipped {skipped_achievements} achievement bonuses due to missing reward data.")
 
     # Manager performances
     try:

@@ -1,0 +1,20 @@
+
+[theme]
+base="dark"
+primaryColor="#205EA6"
+backgroundColor="#1C1B1A"
+secondaryBackgroundColor="#282726"
+textColor="#CECDC3"
+font="sans serif"
+
+[custom]
+# Flexoki palette for reference
+# bg: #FFFCF0 (light), #100F0F (dark)
+# bg-2: #F2F0E5 (light), #1C1B1A (dark)
+# ui: #E6E4D9 (light), #282726 (dark)
+# ui-2: #DAD8CE (light), #343331 (dark)
+# ui-3: #CECDC3 (light), #403E3C (dark)
+# tx: #100F0F (light), #CECDC3 (dark)
+# tx-2: #6F6E69 (light), #878580 (dark)
+# tx-3: #B7B5AC (light), #575653 (dark)
+# Accent: blue-600 #205EA6, red-600 #AF3029, orange-600 #BC5215, yellow-600 #AD8301, green-600 #66800B, cyan-600 #24837B, purple-600 #5E409D, magenta-600 #A02F6F

@@ -47,12 +47,17 @@ def get_matchdays(token, competition_id):
     return result
 
 def get_achievement_reward(token, league_id, achievement_id):
-    """Get the reward and how often this was achieved by the user for a specific achievement in a league."""
+    """Get the reward and how often this was achieved by the user for a specific achievement in a league.
+    Returns (amount, reward) or (None, None) if not available."""
 
     url = f"{BASE_URL}/leagues/{league_id}/user/achievements/{achievement_id}"
     data = get_json_with_token(url, token)
 
-    amount = data["ac"]
-    reward = data["er"]
+    amount = data.get("ac")
+    reward = data.get("er")
+
+    if amount is None or reward is None:
+        # Silently skip if keys are missing
+        return None, None
 
     return amount, reward
