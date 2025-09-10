@@ -382,7 +382,7 @@ with tab2:
                 return val
 
         if not market_table.empty:
-            styled_market = market_table.style.format(format_thousands, subset=["Marktwert", "MW Veränderung gestern", "Vorhersage"]).applymap(color_mv, subset=["MW Veränderung gestern", "Vorhersage"])
+            styled_market = market_table.style.format(format_thousands, subset=["Marktwert", "+/-", "Vorhersage"]).applymap(color_mv, subset=["+/-", "Vorhersage"])
             st.dataframe(styled_market, use_container_width=True, hide_index=True)
         else:
             st.info("Keine Markt-Empfehlungen verfügbar.")
