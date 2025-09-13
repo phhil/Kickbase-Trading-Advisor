@@ -93,7 +93,8 @@ def check_if_data_reload_needed():
         
         # Any other case we need to reload
         else:
-            print("\nData reload needed, this takes a few minutes...")
+            from features.console_formatter import print_warning
+            print_warning("Data reload needed, this takes a few minutes...")
             return True
 
 

@@ -11,6 +11,10 @@ from features.predictions.data_handler import (
     load_player_data_from_db,
 )
 from features.budgets import calc_manager_budgets
+from features.console_formatter import (
+    print_header, print_success, print_info, print_warning, 
+    display_dataframe, print_model_evaluation, print_separator
+)
 from IPython.display import display
 from dotenv import load_dotenv
 import os, pandas as pd
@@ -65,46 +69,55 @@ email = os.getenv("EMAIL_USER")         # Email to send recommendations to, can 
 # Load environment variables and login to kickbase
 USERNAME = os.getenv("KICK_USER") # DO NOT CHANGE THIS, YOU MUST SET THOSE IN GITHUB SECRETS OR A .env FILE
 PASSWORD = os.getenv("KICK_PASS") # DO NOT CHANGE THIS, YOU MUST SET THOSE IN GITHUB SECRETS OR A .env FILE
+
+print_header("🏈 Kickbase Trading Advisor", "Analyzing market opportunities and team performance")
+print_separator()
+
 token = login(USERNAME, PASSWORD)
-print("\nLogged in to Kickbase.")
+print_success("Successfully logged in to Kickbase")
 
 # Get league ID
 league_id = get_league_id(token, league_name)
 
 # Calculate (estimated) budgets of all managers in the league
 manager_budgets_df = calc_manager_budgets(token, league_id, league_start_date, start_budget)
-print("\n=== Manager Budgets ===")
-display(manager_budgets_df)
+display_dataframe(manager_budgets_df, "💰 Manager Budgets", max_rows=20)
+
+print_separator()
 
 # Data handling
 create_player_data_table()
 reload_data = check_if_data_reload_needed()
 save_player_data_to_db(token, competition_ids, last_mv_values, last_pfm_values, reload_data)
 player_df = load_player_data_from_db()
-print("\nData loaded from database.")
+print_success("Data loaded from database")
 
 # Preprocess the data and spit the data
 proc_player_df, today_df = preprocess_player_data(player_df)
 X_train, X_test, y_train, y_test = split_data(proc_player_df, features, target)
-print("\nData preprocessed.")
+print_success("Data preprocessed successfully")
 
 # Train and evaluate the model
 model = train_model(X_train, y_train)
 signs_percent, rmse, mae, r2 = evaluate_model(model, X_test, y_test)
-print(f"\nModel evaluation:\nSigns correct: {signs_percent:.2f}%\nRMSE: {rmse:.2f}\nMAE: {mae:.2f}\nR2: {r2:.2f}")
+print_model_evaluation(signs_percent, rmse, mae, r2)
+
+print_separator()
 
 # Make live data predictions
 live_predictions_df = live_data_predictions(today_df, model, features)
 
 # Join with current available players on the market
 market_recommendations_df = join_current_market(token, league_id, live_predictions_df)
-print("\n=== Market Recommendations ===")
-display(market_recommendations_df)
+display_dataframe(market_recommendations_df, "📈 Market Recommendations", max_rows=15)
+
+print_separator()
 
 # Join with current players on the team
 squad_recommendations_df = join_current_squad(token, league_id, live_predictions_df)
-print("\n=== Squad Recommendations ===")
-display(squad_recommendations_df)
+display_dataframe(squad_recommendations_df, "⚽ Squad Analysis", max_rows=15)
 
 # Send email with recommendations
+print_separator()
 send_mail(manager_budgets_df, market_recommendations_df, squad_recommendations_df, email)
+print_info("Analysis complete! 🎉")
