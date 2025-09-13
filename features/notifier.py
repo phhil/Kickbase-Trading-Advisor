@@ -8,7 +8,8 @@ def send_mail(budget_df, market_df, squad_df, email):
     """Sends an email with the provided DataFrames as HTML tables."""
 
     if not email:
-        print("\nNo email provided, skipping email sending.")
+        from features.console_formatter import print_warning
+        print_warning("No email provided, skipping email sending")
         return
 
     EMAIL_ADDRESS = os.getenv("EMAIL_USER")
@@ -87,4 +88,5 @@ def send_mail(budget_df, market_df, squad_df, email):
         smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
         smtp.send_message(msg)
         
-    print("\nEmail sent successfully!")
+    from features.console_formatter import print_success
+    print_success("Email sent successfully!")
