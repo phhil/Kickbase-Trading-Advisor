@@ -15,77 +15,118 @@ from numba import jit
 class AdvancedEnsemblePredictor:
     """Enhanced ensemble predictor with advanced gradient boosting models and specialized handling for different value ranges"""
     
-    def __init__(self):
-        # Advanced models with optimized parameters for financial predictions
-        self.models = {
-            'xgb': xgb.XGBRegressor(
-                n_estimators=1000,
-                max_depth=8,
-                learning_rate=0.05,
-                subsample=0.8,
-                colsample_bytree=0.8,
-                reg_alpha=0.1,
-                reg_lambda=1.0,
-                early_stopping_rounds=50,
-                random_state=42,
-                n_jobs=-1
-            ),
-            'lgb': lgb.LGBMRegressor(
-                n_estimators=1000,
-                max_depth=8,
-                learning_rate=0.05,
-                subsample=0.8,
-                colsample_bytree=0.8,
-                reg_alpha=0.1,
-                reg_lambda=1.0,
-                early_stopping_rounds=50,
-                random_state=42,
-                n_jobs=-1,
-                verbose=-1
-            ),
-            'cat': cb.CatBoostRegressor(
-                iterations=1000,
-                depth=8,
-                learning_rate=0.05,
-                subsample=0.8,
-                reg_lambda=1.0,
-                early_stopping_rounds=50,
-                random_state=42,
-                verbose=False,
-                thread_count=-1
-            ),
-            'rf': RandomForestRegressor(
-                n_estimators=500,
-                max_depth=15,
-                min_samples_split=10,
-                min_samples_leaf=5,
-                max_features=0.8,
-                n_jobs=-1,
-                random_state=42
-            ),
-            'gb': GradientBoostingRegressor(
-                n_estimators=500,
-                max_depth=8,
-                learning_rate=0.05,
-                subsample=0.8,
-                random_state=42
-            ),
-            'elastic': ElasticNet(
-                alpha=0.1,
-                l1_ratio=0.5,
-                random_state=42
-            )
-        }
+    def __init__(self, fast_mode=False):
+        self.fast_mode = fast_mode
         
-        # Dynamic weights - give more weight to advanced models
-        self.weights = {
-            'xgb': 0.25,
-            'lgb': 0.25, 
-            'cat': 0.20,
-            'rf': 0.15,
-            'gb': 0.10,
-            'elastic': 0.05
-        }
+        if fast_mode:
+            # Faster training with reduced complexity for development/testing
+            self.models = {
+                'xgb': xgb.XGBRegressor(
+                    n_estimators=300,
+                    max_depth=6,
+                    learning_rate=0.1,
+                    subsample=0.8,
+                    colsample_bytree=0.8,
+                    reg_alpha=0.1,
+                    reg_lambda=1.0,
+                    random_state=42,
+                    n_jobs=-1
+                ),
+                'lgb': lgb.LGBMRegressor(
+                    n_estimators=300,
+                    max_depth=6,
+                    learning_rate=0.1,
+                    subsample=0.8,
+                    colsample_bytree=0.8,
+                    reg_alpha=0.1,
+                    reg_lambda=1.0,
+                    random_state=42,
+                    n_jobs=-1,
+                    verbose=-1
+                ),
+                'rf': RandomForestRegressor(
+                    n_estimators=200,
+                    max_depth=10,
+                    min_samples_split=10,
+                    min_samples_leaf=5,
+                    max_features=0.8,
+                    n_jobs=-1,
+                    random_state=42
+                )
+            }
+            # Simplified weights for fast mode
+            self.weights = {'xgb': 0.4, 'lgb': 0.4, 'rf': 0.2}
+        else:
+            # Advanced models with optimized parameters for financial predictions
+            self.models = {
+                'xgb': xgb.XGBRegressor(
+                    n_estimators=1000,
+                    max_depth=8,
+                    learning_rate=0.05,
+                    subsample=0.8,
+                    colsample_bytree=0.8,
+                    reg_alpha=0.1,
+                    reg_lambda=1.0,
+                    early_stopping_rounds=50,
+                    random_state=42,
+                    n_jobs=-1
+                ),
+                'lgb': lgb.LGBMRegressor(
+                    n_estimators=1000,
+                    max_depth=8,
+                    learning_rate=0.05,
+                    subsample=0.8,
+                    colsample_bytree=0.8,
+                    reg_alpha=0.1,
+                    reg_lambda=1.0,
+                    early_stopping_rounds=50,
+                    random_state=42,
+                    n_jobs=-1,
+                    verbose=-1
+                ),
+                'cat': cb.CatBoostRegressor(
+                    iterations=1000,
+                    depth=8,
+                    learning_rate=0.05,
+                    subsample=0.8,
+                    reg_lambda=1.0,
+                    early_stopping_rounds=50,
+                    random_state=42,
+                    verbose=False,
+                    thread_count=-1
+                ),
+                'rf': RandomForestRegressor(
+                    n_estimators=500,
+                    max_depth=15,
+                    min_samples_split=10,
+                    min_samples_leaf=5,
+                    max_features=0.8,
+                    n_jobs=-1,
+                    random_state=42
+                ),
+                'gb': GradientBoostingRegressor(
+                    n_estimators=500,
+                    max_depth=8,
+                    learning_rate=0.05,
+                    subsample=0.8,
+                    random_state=42
+                ),
+                'elastic': ElasticNet(
+                    alpha=0.1,
+                    l1_ratio=0.5,
+                    random_state=42
+                )
+            }
+            
+            # Dynamic weights - give more weight to advanced models
+            self.weights = {
+                'xgb': 0.25,
+                'lgb': 0.25, 
+                'cat': 0.20,
+                'rf': 0.15,
+                'gb': 0.10,
+                'elastic': 0.05
+            }
         
         # Specialized models for different value ranges
         self.range_models = {
@@ -237,10 +278,10 @@ class AdvancedEnsemblePredictor:
             raise ValueError("Model must be fitted before getting feature importance")
         return self.feature_importance_
 
-def train_model(X_train, y_train):
+def train_model(X_train, y_train, fast_mode=False):
     """Train an advanced ensemble model with better performance"""
     
-    model = AdvancedEnsemblePredictor()
+    model = AdvancedEnsemblePredictor(fast_mode=fast_mode)
     model.fit(X_train, y_train)
     
     return model

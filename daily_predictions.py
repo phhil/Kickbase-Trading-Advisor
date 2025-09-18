@@ -85,6 +85,9 @@ email = os.getenv("EMAIL_USER")         # Email to send recommendations to, can 
 USERNAME = os.getenv("KICK_USER") # DO NOT CHANGE THIS, YOU MUST SET THOSE IN GITHUB SECRETS OR A .env FILE
 PASSWORD = os.getenv("KICK_PASS") # DO NOT CHANGE THIS, YOU MUST SET THOSE IN GITHUB SECRETS OR A .env FILE
 
+# Performance mode: set FAST_MODE=1 for faster training (useful for development/testing)
+FAST_MODE = os.getenv("FAST_MODE", "0") == "1"
+
 print_header("🏈 Kickbase Trading Advisor", "Analyzing market opportunities and team performance")
 print_separator()
 
@@ -126,9 +129,9 @@ with operation_timer("Data loading and processing"):
 print_success("Data loaded from database")
 
 # Preprocess the data and split the data
-print_step("Data Preprocessing", "Cleaning and preparing data for machine learning")
+print_step("Data Preprocessing", f"Cleaning and preparing data for machine learning ({'Fast' if FAST_MODE else 'Enhanced'} mode)")
 with operation_timer("Data preprocessing"):
-    proc_player_df, today_df = preprocess_player_data(player_df)
+    proc_player_df, today_df = preprocess_player_data(player_df, fast_mode=FAST_MODE)
     X_train, X_test, y_train, y_test = split_data(proc_player_df, features, target)
 
 # Data quality checks
@@ -142,9 +145,9 @@ else:
 print_success("Data preprocessed successfully")
 
 # Train and evaluate the model
-print_step("Model Training", "Training ensemble machine learning model with multiple algorithms")
+print_step("Model Training", f"Training ensemble machine learning model ({'Fast' if FAST_MODE else 'Full'} mode)")
 with operation_timer("Model training"):
-    model = train_model(X_train, y_train)
+    model = train_model(X_train, y_train, fast_mode=FAST_MODE)
 
 print_step("Model Evaluation", "Testing model performance on unseen data")
 with operation_timer("Model evaluation"):

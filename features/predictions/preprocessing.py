@@ -21,10 +21,10 @@ def fast_rolling_std(values, window):
         result[i] = np.std(values[i-window+1:i+1])
     return result
 
-def preprocess_player_data(df):
+def preprocess_player_data(df, fast_mode=False):
     """Preprocess the player data for modeling with enhanced features for small changes"""
     
-    print("Starting enhanced data preprocessing...")
+    print(f"Starting {'fast' if fast_mode else 'enhanced'} data preprocessing...")
     
     # 1. Sort and filter (optimized)
     df = df.sort_values(["player_id", "date"])
@@ -66,7 +66,10 @@ def preprocess_player_data(df):
     
     # Volatility measures (important for small changes)
     df["mv_vol_3d"] = df.groupby("player_id")["mv"].rolling(3).std().reset_index(0,drop=True)
-    df["mv_vol_7d"] = df.groupby("player_id")["mv"].rolling(7).std().reset_index(0,drop=True)
+    if not fast_mode:
+        df["mv_vol_7d"] = df.groupby("player_id")["mv"].rolling(7).std().reset_index(0,drop=True)
+    else:
+        df["mv_vol_7d"] = df["mv_vol_3d"]  # Use 3d as proxy for speed
     
     # Market value trend analysis
     df["mv_trend_7d"] = df.groupby("player_id")["mv"].pct_change(periods=7, fill_method=None)
@@ -75,7 +78,7 @@ def preprocess_player_data(df):
     # Enhanced league-wide market context
     df["market_divergence"] = (df["mv"] / df.groupby("md")["mv"].transform("mean")).rolling(3).mean()
     
-    # NEW: Small change specific features
+    # Small change specific features
     df["mv_micro_trend"] = df.groupby("player_id")["mv"].pct_change(periods=2, fill_method=None).replace([np.inf, -np.inf], 0).fillna(0)
     df["mv_stability"] = 1 / (df["mv_vol_3d"] + 1)  # Higher for more stable players
     df["mv_recent_direction"] = np.sign(df["mv_change_1d"])  # Recent direction
@@ -129,23 +132,34 @@ def preprocess_player_data(df):
     # Market value momentum indicators (enhanced)
     df["mv_momentum_short"] = df.groupby("player_id")["mv"].pct_change(periods=2, fill_method=None).replace([np.inf, -np.inf], 0).fillna(0)
     df["mv_momentum_long"] = df.groupby("player_id")["mv"].pct_change(periods=5, fill_method=None).replace([np.inf, -np.inf], 0).fillna(0)
-    df["mv_momentum_very_long"] = df.groupby("player_id")["mv"].pct_change(periods=10, fill_method=None).replace([np.inf, -np.inf], 0).fillna(0)
+    
+    if not fast_mode:
+        df["mv_momentum_very_long"] = df.groupby("player_id")["mv"].pct_change(periods=10, fill_method=None).replace([np.inf, -np.inf], 0).fillna(0)
+    else:
+        df["mv_momentum_very_long"] = df["mv_momentum_long"]  # Use long as proxy for speed
+        
     df["mv_acceleration"] = df["mv_momentum_short"] - df["mv_momentum_long"]
     
-    # NEW: Advanced features for small change prediction
+    # Advanced features for small change prediction
     df["mv_relative_change"] = df["mv_change_1d"] / (df["mv"] + 1e-8)  # Relative to current value
     df["mv_price_pressure"] = df.groupby("player_id")["mv_change_1d"].rolling(3).mean().reset_index(0,drop=True)  # Recent pressure
     df["form_mv_interaction"] = df["recent_form"] * df["mv_trend_1d"]  # Form-price interaction
     
-    # Team performance indicators
-    team_stats = df.groupby(["team_name", "md"]).agg({
-        "won": "mean",
-        "p": "mean"
-    }).reset_index()
-    team_stats.columns = ["team_name", "md", "team_win_rate", "team_avg_points"]
-    df = df.merge(team_stats, on=["team_name", "md"], how="left")
-    
-    df["team_form"] = df.groupby("team_name")["team_win_rate"].rolling(3).mean().reset_index(0,drop=True)
+    # Team performance indicators (simplified in fast mode)
+    if not fast_mode:
+        team_stats = df.groupby(["team_name", "md"]).agg({
+            "won": "mean",
+            "p": "mean"
+        }).reset_index()
+        team_stats.columns = ["team_name", "md", "team_win_rate", "team_avg_points"]
+        df = df.merge(team_stats, on=["team_name", "md"], how="left")
+        
+        df["team_form"] = df.groupby("team_name")["team_win_rate"].rolling(3).mean().reset_index(0,drop=True)
+    else:
+        # Use simplified team features for speed
+        df["team_win_rate"] = df.groupby("team_name")["won"].transform("mean")
+        df["team_avg_points"] = df.groupby("team_name")["p"].transform("mean")
+        df["team_form"] = df["team_win_rate"]
 
     # 5. Enhanced outlier clipping for better small change handling
     print("Applying enhanced outlier treatment...")
