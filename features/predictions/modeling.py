@@ -100,7 +100,12 @@ def evaluate_model(model, X_test, y_test):
     signs_percent = (signs_correct / len(y_test)) * 100
     
     # Additional metrics for better evaluation
-    mape = np.mean(np.abs((y_test - y_pred) / (np.abs(y_test) + 1e-8))) * 100
+    # Handle division by zero in MAPE calculation
+    non_zero_mask = np.abs(y_test) > 1e-8
+    if np.sum(non_zero_mask) > 0:
+        mape = np.mean(np.abs((y_test[non_zero_mask] - y_pred[non_zero_mask]) / y_test[non_zero_mask])) * 100
+    else:
+        mape = float('inf')  # Set to infinity if all actual values are zero
     
     # Prediction accuracy in different ranges
     small_changes = np.abs(y_test) < 50000  # Small changes < 50k

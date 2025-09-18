@@ -302,5 +302,38 @@ def print_model_warning(warning_type, details=None):
             "Some features may be highly correlated, but model should still work",
             "This may slightly affect numerical precision but not overall results"
         )
+    elif warning_type == "low_r2":
+        print_warning_with_context(
+            "Low model performance detected",
+            f"R² score is low: {details}",
+            "Consider feature engineering or data quality improvements"
+        )
     else:
         print_warning(f"Model warning: {warning_type}" + (f" - {details}" if details else ""))
+
+def print_network_error(error_details):
+    """Handle network-related errors with helpful context"""
+    print_error("Network connection failed")
+    console.print(f"[dim]   Error details: {error_details}[/dim]")
+    console.print("[dim]   This usually means:[/dim]")
+    console.print("[dim]   • No internet connection available[/dim]")
+    console.print("[dim]   • Kickbase API is temporarily unavailable[/dim]")
+    console.print("[dim]   • Firewall blocking the connection[/dim]")
+    console.print("[dim]   Suggestion: Check your internet connection and try again[/dim]")
+
+def print_processing_summary(total_items, success_count, error_count):
+    """Print a summary of batch processing results"""
+    console.print(f"\n[bold cyan]📊 Processing Summary[/bold cyan]")
+    console.print(f"[green]✓ Successful: {success_count}/{total_items}[/green]")
+    if error_count > 0:
+        console.print(f"[red]✗ Failed: {error_count}/{total_items}[/red]")
+    else:
+        console.print(f"[green]✓ All items processed successfully![/green]")
+    
+    success_rate = (success_count / total_items * 100) if total_items > 0 else 0
+    if success_rate == 100:
+        console.print(f"[green]Success rate: {success_rate:.1f}%[/green]")
+    elif success_rate >= 90:
+        console.print(f"[yellow]Success rate: {success_rate:.1f}%[/yellow]")
+    else:
+        console.print(f"[red]Success rate: {success_rate:.1f}%[/red]")

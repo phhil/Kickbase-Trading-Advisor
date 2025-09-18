@@ -15,7 +15,7 @@ from features.budgets import calc_manager_budgets
 from features.console_formatter import (
     print_header, print_success, print_info, print_warning, print_error,
     display_dataframe, print_model_evaluation, print_separator, print_feature_importance,
-    print_step, operation_timer, suppress_sklearn_warnings, print_model_warning
+    print_step, operation_timer, suppress_sklearn_warnings, print_model_warning, print_network_error
 )
 from IPython.display import display
 from dotenv import load_dotenv
@@ -87,9 +87,16 @@ print_separator()
 suppress_sklearn_warnings()
 
 print_step("Authentication", "Logging into Kickbase platform")
-with operation_timer("Login"):
-    token = login(USERNAME, PASSWORD)
-print_success("Successfully logged in to Kickbase")
+try:
+    with operation_timer("Login"):
+        token = login(USERNAME, PASSWORD)
+    print_success("Successfully logged in to Kickbase")
+except Exception as e:
+    if "ConnectionError" in str(type(e)) or "NameResolutionError" in str(e):
+        print_network_error(str(e))
+    else:
+        print_error(f"Login failed: {e}")
+    raise
 
 # Get league ID
 print_step("League Analysis", "Fetching league information and manager budgets")
@@ -118,6 +125,15 @@ print_step("Data Preprocessing", "Cleaning and preparing data for machine learni
 with operation_timer("Data preprocessing"):
     proc_player_df, today_df = preprocess_player_data(player_df)
     X_train, X_test, y_train, y_test = split_data(proc_player_df, features, target)
+
+# Data quality checks
+print_info(f"Training data: {len(X_train):,} samples with {len(features)} features")
+print_info(f"Test data: {len(X_test):,} samples")
+if len(today_df) > 0:
+    print_info(f"Current market data: {len(today_df):,} players available for prediction")
+else:
+    print_warning("No current market data available - predictions may be limited")
+
 print_success("Data preprocessed successfully")
 
 # Train and evaluate the model
