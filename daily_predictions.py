@@ -43,15 +43,20 @@ features = [
     # Original features
     "p", "mv", "days_to_next", 
     "mv_change_1d", "mv_trend_1d", 
-    "mv_change_3d", "mv_vol_3d",
+    "mv_change_3d", "mv_change_7d", "mv_vol_3d", "mv_vol_7d",
     "mv_trend_7d", "market_divergence",
     # Enhanced features for better predictions
-    "points_ma_3", "points_ma_5", "points_trend",
-    "mp_ma_3", "mp_consistency",
-    "ppm_ma_3", "ppm_trend",
-    "win_rate_3", "recent_form",
+    "points_ma_3", "points_ma_5", "points_trend", "points_consistency",
+    "mp_ma_3", "mp_consistency", "mp_trend",
+    "ppm_ma_3", "ppm_trend", "ppm_volatility",
+    "win_rate_3", "win_rate_5", "recent_form",
     "p_vs_position", "mv_vs_position", "ppm_vs_position",
-    "mv_momentum_short", "mv_momentum_long", "mv_acceleration"
+    "mv_momentum_short", "mv_momentum_long", "mv_momentum_very_long", "mv_acceleration",
+    # NEW: Small change specific features
+    "mv_micro_trend", "mv_stability", "mv_recent_direction",
+    "mv_percentile", "mv_zscore",
+    "mv_relative_change", "mv_price_pressure", "form_mv_interaction",
+    "team_win_rate", "team_avg_points", "team_form"
 ]
 
 # what column to learn and predict on
@@ -79,6 +84,9 @@ email = os.getenv("EMAIL_USER")         # Email to send recommendations to, can 
 # Load environment variables and login to kickbase
 USERNAME = os.getenv("KICK_USER") # DO NOT CHANGE THIS, YOU MUST SET THOSE IN GITHUB SECRETS OR A .env FILE
 PASSWORD = os.getenv("KICK_PASS") # DO NOT CHANGE THIS, YOU MUST SET THOSE IN GITHUB SECRETS OR A .env FILE
+
+# Performance mode: set FAST_MODE=1 for faster training (useful for development/testing)
+FAST_MODE = os.getenv("FAST_MODE", "0") == "1"
 
 print_header("🏈 Kickbase Trading Advisor", "Analyzing market opportunities and team performance")
 print_separator()
@@ -121,9 +129,9 @@ with operation_timer("Data loading and processing"):
 print_success("Data loaded from database")
 
 # Preprocess the data and split the data
-print_step("Data Preprocessing", "Cleaning and preparing data for machine learning")
+print_step("Data Preprocessing", f"Cleaning and preparing data for machine learning ({'Fast' if FAST_MODE else 'Enhanced'} mode)")
 with operation_timer("Data preprocessing"):
-    proc_player_df, today_df = preprocess_player_data(player_df)
+    proc_player_df, today_df = preprocess_player_data(player_df, fast_mode=FAST_MODE)
     X_train, X_test, y_train, y_test = split_data(proc_player_df, features, target)
 
 # Data quality checks
@@ -137,9 +145,9 @@ else:
 print_success("Data preprocessed successfully")
 
 # Train and evaluate the model
-print_step("Model Training", "Training ensemble machine learning model with multiple algorithms")
+print_step("Model Training", f"Training ensemble machine learning model ({'Fast' if FAST_MODE else 'Full'} mode)")
 with operation_timer("Model training"):
-    model = train_model(X_train, y_train)
+    model = train_model(X_train, y_train, fast_mode=FAST_MODE)
 
 print_step("Model Evaluation", "Testing model performance on unseen data")
 with operation_timer("Model evaluation"):

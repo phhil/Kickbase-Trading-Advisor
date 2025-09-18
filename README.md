@@ -16,6 +16,12 @@
       <strong>Market Value Prediction:</strong> Using selected features such as points, minutes played, current market value, recent value changes, and more, a machine learning model predicts market value changes for the following day. This is done for all players currently on the market as well as those in your squad.
     </li>
     <li>
+      <strong>Advanced Machine Learning Model:</strong> Uses an ensemble of XGBoost, LightGBM, CatBoost, and other algorithms with specialized models for different value change ranges. Features 35+ engineered features optimized for small market value changes (<50k), which are notoriously difficult to predict.
+    </li>
+    <li>
+      <strong>Performance Optimized:</strong> Features fast mode (9x faster training) and Numba-optimized evaluation functions. Supports both development-friendly fast mode and production-quality full mode for maximum accuracy.
+    </li>
+    <li>
       <strong>Email Notifier:</strong> The results from the previous features are sent to you via email daily around 23:00 (+-45 minutes), always after the market value updates around 22:00. You can also run this manually at any time without waiting for the scheduled execution.
     </li>
     <li>
