@@ -4,6 +4,9 @@ from sklearn.linear_model import Ridge
 from sklearn.model_selection import cross_val_score
 import numpy as np
 import pandas as pd
+import warnings
+from contextlib import redirect_stderr
+import io
 
 class EnsemblePredictor:
     """Enhanced ensemble predictor combining multiple algorithms"""
@@ -39,8 +42,13 @@ class EnsemblePredictor:
         # Fill any NaN values before training
         X_train_filled = X_train.fillna(0)
         
-        for name, model in self.models.items():
-            model.fit(X_train_filled, y_train)
+        # Suppress sklearn warnings during training
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', category=UserWarning, module='sklearn')
+            warnings.filterwarnings('ignore', category=RuntimeWarning, module='scipy')
+            
+            for name, model in self.models.items():
+                model.fit(X_train_filled, y_train)
         
         # Calculate feature importance from Random Forest
         self.feature_importance_ = pd.DataFrame({
@@ -57,10 +65,14 @@ class EnsemblePredictor:
         
         predictions = np.zeros(len(X_filled))
         
-        for name, model in self.models.items():
-            pred = model.predict(X_filled)
-            predictions += self.weights[name] * pred
+        # Suppress sklearn warnings during prediction
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', category=UserWarning, module='sklearn')
             
+            for name, model in self.models.items():
+                pred = model.predict(X_filled)
+                predictions += self.weights[name] * pred
+                
         return predictions
     
     def get_feature_importance(self):
@@ -88,7 +100,12 @@ def evaluate_model(model, X_test, y_test):
     signs_percent = (signs_correct / len(y_test)) * 100
     
     # Additional metrics for better evaluation
-    mape = np.mean(np.abs((y_test - y_pred) / (np.abs(y_test) + 1e-8))) * 100
+    # Handle division by zero in MAPE calculation
+    non_zero_mask = np.abs(y_test) > 1e-8
+    if np.sum(non_zero_mask) > 0:
+        mape = np.mean(np.abs((y_test[non_zero_mask] - y_pred[non_zero_mask]) / y_test[non_zero_mask])) * 100
+    else:
+        mape = float('inf')  # Set to infinity if all actual values are zero
     
     # Prediction accuracy in different ranges
     small_changes = np.abs(y_test) < 50000  # Small changes < 50k
@@ -107,8 +124,11 @@ def cross_validate_model(X, y, cv=5):
     
     model = EnsemblePredictor()
     
-    # Cross-validation scores
-    cv_scores = cross_val_score(model.models['rf'], X, y, cv=cv, scoring='neg_mean_squared_error')
+    # Cross-validation scores with warning suppression
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', category=UserWarning, module='sklearn')
+        cv_scores = cross_val_score(model.models['rf'], X, y, cv=cv, scoring='neg_mean_squared_error')
+    
     cv_rmse = np.sqrt(-cv_scores)
     
     return cv_rmse.mean(), cv_rmse.std()
@@ -119,7 +139,11 @@ def get_prediction_confidence(model, X, n_estimators_subset=50):
     
     # Get predictions from individual trees for confidence estimation
     rf_model = model.models['rf']
-    tree_predictions = np.array([tree.predict(X) for tree in rf_model.estimators_[:n_estimators_subset]])
+    
+    # Suppress warnings during confidence calculation
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', category=UserWarning, module='sklearn')
+        tree_predictions = np.array([tree.predict(X) for tree in rf_model.estimators_[:n_estimators_subset]])
     
     # Calculate prediction statistics
     pred_mean = np.mean(tree_predictions, axis=0)

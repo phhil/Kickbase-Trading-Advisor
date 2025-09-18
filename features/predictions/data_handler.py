@@ -93,8 +93,12 @@ def check_if_data_reload_needed():
         
         # Any other case we need to reload
         else:
-            from features.console_formatter import print_warning
-            print_warning("Data reload needed, this takes a few minutes...")
+            from features.console_formatter import print_warning_with_context
+            print_warning_with_context(
+                "Data reload needed, this takes a few minutes...",
+                "Market value data is outdated or missing for recent dates",
+                "Please be patient while we fetch the latest player data from Kickbase API"
+            )
             return True
 
 
