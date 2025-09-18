@@ -52,7 +52,7 @@ def get_achievement_reward(token, league_id, achievement_id):
     url = f"{BASE_URL}/leagues/{league_id}/user/achievements/{achievement_id}"
     data = get_json_with_token(url, token)
 
-    amount = data.get("ac", 0)
-    reward = data.get("er", 0)
+    amount = data.get("ac", 0) or 0  # Ensure we get 0 instead of None
+    reward = data.get("er", 0) or 0  # Ensure we get 0 instead of None
 
     return amount, reward
