@@ -250,7 +250,8 @@ def backtest_strategy(data_df: pd.DataFrame, model, features: List[str],
     
     simulator = TradingSimulator(initial_budget)
     
-    # Filter data by date range
+    # Filter data by date range - make a copy to avoid SettingWithCopyWarning
+    data_df = data_df.copy()
     data_df['date'] = pd.to_datetime(data_df['date'])
     if start_date:
         data_df = data_df[data_df['date'] >= start_date]
