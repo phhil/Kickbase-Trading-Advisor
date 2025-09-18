@@ -13,8 +13,9 @@ from features.predictions.data_handler import (
 )
 from features.budgets import calc_manager_budgets
 from features.console_formatter import (
-    print_header, print_success, print_info, print_warning, 
-    display_dataframe, print_model_evaluation, print_separator, print_feature_importance
+    print_header, print_success, print_info, print_warning, print_error,
+    display_dataframe, print_model_evaluation, print_separator, print_feature_importance,
+    print_step, operation_timer, suppress_sklearn_warnings, print_model_warning
 )
 from IPython.display import display
 from dotenv import load_dotenv
@@ -82,33 +83,51 @@ PASSWORD = os.getenv("KICK_PASS") # DO NOT CHANGE THIS, YOU MUST SET THOSE IN GI
 print_header("🏈 Kickbase Trading Advisor", "Analyzing market opportunities and team performance")
 print_separator()
 
-token = login(USERNAME, PASSWORD)
+# Suppress sklearn warnings to clean up console output
+suppress_sklearn_warnings()
+
+print_step("Authentication", "Logging into Kickbase platform")
+with operation_timer("Login"):
+    token = login(USERNAME, PASSWORD)
 print_success("Successfully logged in to Kickbase")
 
 # Get league ID
-league_id = get_league_id(token, league_name)
+print_step("League Analysis", "Fetching league information and manager budgets")
+with operation_timer("League data retrieval"):
+    league_id = get_league_id(token, league_name)
 
 # Calculate (estimated) budgets of all managers in the league
-manager_budgets_df = calc_manager_budgets(token, league_id, league_start_date, start_budget)
+with operation_timer("Budget calculation"):
+    manager_budgets_df = calc_manager_budgets(token, league_id, league_start_date, start_budget)
 display_dataframe(manager_budgets_df, "💰 Manager Budgets", max_rows=20)
 
 print_separator()
 
 # Data handling
+print_step("Data Management", "Setting up database and loading player data")
 create_player_data_table()
 reload_data = check_if_data_reload_needed()
-save_player_data_to_db(token, competition_ids, last_mv_values, last_pfm_values, reload_data)
-player_df = load_player_data_from_db()
+
+with operation_timer("Data loading and processing"):
+    save_player_data_to_db(token, competition_ids, last_mv_values, last_pfm_values, reload_data)
+    player_df = load_player_data_from_db()
 print_success("Data loaded from database")
 
-# Preprocess the data and spit the data
-proc_player_df, today_df = preprocess_player_data(player_df)
-X_train, X_test, y_train, y_test = split_data(proc_player_df, features, target)
+# Preprocess the data and split the data
+print_step("Data Preprocessing", "Cleaning and preparing data for machine learning")
+with operation_timer("Data preprocessing"):
+    proc_player_df, today_df = preprocess_player_data(player_df)
+    X_train, X_test, y_train, y_test = split_data(proc_player_df, features, target)
 print_success("Data preprocessed successfully")
 
 # Train and evaluate the model
-model = train_model(X_train, y_train)
-results = evaluate_model(model, X_test, y_test)
+print_step("Model Training", "Training ensemble machine learning model with multiple algorithms")
+with operation_timer("Model training"):
+    model = train_model(X_train, y_train)
+
+print_step("Model Evaluation", "Testing model performance on unseen data")
+with operation_timer("Model evaluation"):
+    results = evaluate_model(model, X_test, y_test)
 
 # Handle both old and new evaluation function signatures
 if len(results) == 8:
@@ -118,6 +137,10 @@ else:
     signs_percent, rmse, mae, r2 = results
     print_model_evaluation(signs_percent, rmse, mae, r2)
 
+# Check for mathematical warnings and provide context
+if results[3] < 0.1:  # Low R² score
+    print_model_warning("low_r2", f"R² = {results[3]:.3f} indicates model may need improvement")
+
 # Display feature importance if available
 if hasattr(model, 'get_feature_importance'):
     feature_importance = model.get_feature_importance()
@@ -126,16 +149,17 @@ if hasattr(model, 'get_feature_importance'):
 
 # Cross-validation for better model assessment
 print_separator()
-print_info("Running cross-validation...")
+print_step("Model Validation", "Running cross-validation to assess model stability")
 try:
-    cv_rmse_mean, cv_rmse_std = cross_validate_model(X_train, y_train)
+    with operation_timer("Cross-validation"):
+        cv_rmse_mean, cv_rmse_std = cross_validate_model(X_train, y_train)
     print_success(f"Cross-validation RMSE: {cv_rmse_mean:.2f} ± {cv_rmse_std:.2f}")
 except Exception as e:
     print_warning(f"Cross-validation failed: {e}")
 
 # Backtesting simulation
 print_separator()
-print_info("Running backtesting simulation...")
+print_step("Strategy Backtesting", "Testing trading strategies on historical data")
 try:
     # Define strategies to test
     strategies = [
@@ -144,42 +168,61 @@ try:
         ThresholdStrategy(buy_threshold=75000, sell_threshold=-40000, max_hold_days=10)
     ]
     
+    print_info("Testing 3 different trading strategies on last 90 days of data")
+    
     # Run comparison on recent data (last 90 days)
     recent_date = proc_player_df['date'].max() - pd.Timedelta(days=90)
-    strategy_results = run_strategy_comparison(
-        proc_player_df[proc_player_df['date'] >= recent_date], 
-        model, features, strategies
-    )
+    
+    with operation_timer("Strategy backtesting"):
+        strategy_results = run_strategy_comparison(
+            proc_player_df[proc_player_df['date'] >= recent_date], 
+            model, features, strategies
+        )
     
     if not strategy_results.empty:
         display_dataframe(strategy_results[['strategy', 'total_return_pct', 'win_rate_pct', 'max_drawdown_pct', 'sharpe_ratio', 'total_trades']], 
                          "📊 Strategy Backtesting Results")
+    else:
+        print_warning("No backtesting results generated")
 except Exception as e:
-    print_warning(f"Backtesting failed: {e}")
+    print_error(f"Backtesting failed: {e}")
 
 print_separator()
 
 # Make live data predictions
-live_predictions_df = live_data_predictions(today_df, model, features)
+print_step("Live Predictions", "Generating predictions for current player values")
+with operation_timer("Live prediction generation"):
+    live_predictions_df = live_data_predictions(today_df, model, features)
 
 # Make multi-horizon predictions (1-day, 3-day, 7-day)
-multi_horizon_df = multi_horizon_predictions(today_df, model, features)
+print_step("Multi-Horizon Analysis", "Creating predictions for multiple time horizons (1, 3, 7 days)")
+with operation_timer("Multi-horizon predictions"):
+    multi_horizon_df = multi_horizon_predictions(today_df, model, features)
+
 display_dataframe(multi_horizon_df[["last_name", "team_name", "mv", "predicted_mv_1d", "predicted_mv_3d", "predicted_mv_7d", "prediction_confidence", "risk_score"]].head(10), 
                  "🔮 Multi-Horizon Predictions", max_rows=10)
 
 print_separator()
 
 # Join with current available players on the market
-market_recommendations_df = join_current_market(token, league_id, live_predictions_df)
+print_step("Market Analysis", "Analyzing current market opportunities and generating buy recommendations")
+with operation_timer("Market analysis"):
+    market_recommendations_df = join_current_market(token, league_id, live_predictions_df)
 display_dataframe(market_recommendations_df, "📈 Market Recommendations", max_rows=15)
 
 print_separator()
 
 # Join with current players on the team
-squad_recommendations_df = join_current_squad(token, league_id, live_predictions_df)
+print_step("Squad Analysis", "Evaluating current squad performance and identifying sell opportunities")
+with operation_timer("Squad analysis"):
+    squad_recommendations_df = join_current_squad(token, league_id, live_predictions_df)
 display_dataframe(squad_recommendations_df, "⚽ Squad Analysis", max_rows=15)
 
 # Send email with recommendations
 print_separator()
-send_mail(manager_budgets_df, market_recommendations_df, squad_recommendations_df, email)
-print_info("Analysis complete! 🎉")
+print_step("Report Generation", "Sending comprehensive analysis report via email")
+with operation_timer("Email report generation"):
+    send_mail(manager_budgets_df, market_recommendations_df, squad_recommendations_df, email)
+
+print_success("Analysis complete! All predictions and recommendations have been generated. 🎉")
+print_info("Check your email for the detailed report with actionable recommendations.")

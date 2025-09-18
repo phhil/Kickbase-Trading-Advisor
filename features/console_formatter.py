@@ -7,8 +7,13 @@ from rich.table import Table
 from rich.text import Text
 from rich.panel import Panel
 from rich.align import Align
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeRemainingColumn
+from rich.live import Live
+from contextlib import contextmanager
 import pandas as pd
 import numpy as np
+import time
+import warnings
 
 console = Console()
 
@@ -169,8 +174,25 @@ def print_model_evaluation(signs_percent, rmse, mae, r2, mape=None, small_acc=No
     
     # MAPE
     if mape is not None:
-        mape_color = "green" if mape < 20 else "yellow" if mape < 40 else "red"
-        table.add_row("MAPE", f"[{mape_color}]{mape:.2f}%[/{mape_color}]", "[dim]Lower is better[/dim]")
+        # Handle extremely large MAPE values
+        if mape > 1000000:
+            mape_display = f"{mape:.2e}"
+            mape_color = "red"
+            mape_status = "Very high (potential data issue)"
+        elif mape > 100:
+            mape_display = f"{mape:.1f}%"
+            mape_color = "red"
+            mape_status = "High"
+        elif mape > 50:
+            mape_display = f"{mape:.1f}%"
+            mape_color = "yellow"
+            mape_status = "Moderate"
+        else:
+            mape_display = f"{mape:.1f}%"
+            mape_color = "green"
+            mape_status = "Good"
+        
+        table.add_row("MAPE", f"[{mape_color}]{mape_display}[/{mape_color}]", f"[{mape_color}]{mape_status}[/{mape_color}]")
     
     # R²
     r2_color = "green" if r2 > 0.3 else "yellow" if r2 > 0.1 else "red"
@@ -214,3 +236,71 @@ def print_feature_importance(importance_df, top_n=15):
 def print_separator():
     """Print a visual separator"""
     console.print("\n" + "─" * 80 + "\n")
+
+def print_step(step_name, description=None):
+    """Print a step indicator with optional description"""
+    if description:
+        console.print(f"[bold cyan]🔄 {step_name}[/bold cyan]")
+        console.print(f"[dim]   {description}[/dim]")
+    else:
+        console.print(f"[bold cyan]🔄 {step_name}[/bold cyan]")
+
+def print_timing_info(operation_name, duration_seconds):
+    """Print timing information for operations"""
+    if duration_seconds < 60:
+        time_str = f"{duration_seconds:.1f} seconds"
+    else:
+        minutes = int(duration_seconds // 60)
+        seconds = duration_seconds % 60
+        time_str = f"{minutes}m {seconds:.1f}s"
+    
+    console.print(f"[dim]⏱️  {operation_name} completed in {time_str}[/dim]")
+
+@contextmanager
+def operation_timer(operation_name, show_progress=True):
+    """Context manager for timing operations with optional progress indicator"""
+    start_time = time.time()
+    
+    if show_progress:
+        with console.status(f"[bold green]{operation_name}...") as status:
+            try:
+                yield
+            finally:
+                duration = time.time() - start_time
+                print_timing_info(operation_name, duration)
+    else:
+        try:
+            yield
+        finally:
+            duration = time.time() - start_time
+            print_timing_info(operation_name, duration)
+
+def suppress_sklearn_warnings():
+    """Suppress known sklearn warnings that are not critical"""
+    warnings.filterwarnings('ignore', category=UserWarning, module='sklearn')
+    warnings.filterwarnings('ignore', category=RuntimeWarning, module='scipy')
+
+def print_warning_with_context(message, context=None, solution=None):
+    """Print warning with additional context and potential solution"""
+    console.print(f"⚠️  [bold yellow]{message}[/bold yellow]")
+    if context:
+        console.print(f"[dim]   Context: {context}[/dim]")
+    if solution:
+        console.print(f"[dim]   Suggestion: {solution}[/dim]")
+
+def print_model_warning(warning_type, details=None):
+    """Handle specific model-related warnings with context"""
+    if warning_type == "feature_names":
+        print_warning_with_context(
+            "Model feature name warnings detected",
+            "This is a known sklearn compatibility issue and doesn't affect predictions",
+            "These warnings can be safely ignored for this application"
+        )
+    elif warning_type == "ill_conditioned":
+        print_warning_with_context(
+            "Matrix conditioning warning detected",
+            "Some features may be highly correlated, but model should still work",
+            "This may slightly affect numerical precision but not overall results"
+        )
+    else:
+        print_warning(f"Model warning: {warning_type}" + (f" - {details}" if details else ""))
