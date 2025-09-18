@@ -15,7 +15,8 @@ from features.budgets import calc_manager_budgets
 from features.console_formatter import (
     print_header, print_success, print_info, print_warning, print_error,
     display_dataframe, print_model_evaluation, print_separator, print_feature_importance,
-    print_step, operation_timer, suppress_sklearn_warnings, print_model_warning, print_network_error
+    print_step, operation_timer, suppress_sklearn_warnings, print_model_warning, print_network_error,
+    print_trading_tips, print_market_summary, print_prediction_methodology, print_data_freshness_info
 )
 from IPython.display import display
 from dotenv import load_dotenv
@@ -223,8 +224,25 @@ print_step("Multi-Horizon Analysis", "Creating predictions for multiple time hor
 with operation_timer("Multi-horizon predictions"):
     multi_horizon_df = multi_horizon_predictions(today_df, model, features)
 
-display_dataframe(multi_horizon_df[["last_name", "team_name", "mv", "predicted_mv_1d", "predicted_mv_3d", "predicted_mv_7d", "prediction_confidence", "risk_score"]].head(10), 
-                 "🔮 Multi-Horizon Predictions", max_rows=10)
+# Enhanced display with custom column descriptions
+column_descriptions = {
+    'last_name': 'Player\nName',
+    'team_name': 'Team',
+    'mv': 'Current\nValue (€)',
+    'predicted_mv_1d': 'Predicted\n1-Day (€)',
+    'predicted_mv_3d': 'Predicted\n3-Day (€)', 
+    'predicted_mv_7d': 'Predicted\n7-Day (€)',
+    'prediction_confidence': 'Confidence\nScore',
+    'risk_score': 'Risk Level\n(0-1)'
+}
+
+display_dataframe(
+    multi_horizon_df[["last_name", "team_name", "mv", "predicted_mv_1d", "predicted_mv_3d", "predicted_mv_7d", "prediction_confidence", "risk_score"]].head(15), 
+    "🔮 Multi-Horizon Market Value Predictions", 
+    max_rows=15,
+    show_insights=True,
+    column_descriptions=column_descriptions
+)
 
 print_separator()
 
@@ -232,7 +250,28 @@ print_separator()
 print_step("Market Analysis", "Analyzing current market opportunities and generating buy recommendations")
 with operation_timer("Market analysis"):
     market_recommendations_df = join_current_market(token, league_id, live_predictions_df)
-display_dataframe(market_recommendations_df, "📈 Market Recommendations", max_rows=15)
+
+# Enhanced market display with better descriptions
+market_column_descriptions = {
+    'last_name': 'Player\nName',
+    'team_name': 'Team',
+    'mv': 'Current\nValue (€)',
+    'mv_change_yesterday': 'Yesterday\nChange (€)',
+    'predicted_mv_target': 'Predicted\nGain (€)',
+    's_11_prob': 'Start XI\nProb (%)',
+    'hours_to_exp': 'Time Left\n(Hours)',
+    'expiring_today': 'Expires\nToday?',
+    'risk_score': 'Risk Level\n(0-1)',
+    'investment_grade': 'Investment\nRecommendation'
+}
+
+display_dataframe(
+    market_recommendations_df, 
+    "📈 Transfer Market Opportunities", 
+    max_rows=20,
+    show_insights=True,
+    column_descriptions=market_column_descriptions
+)
 
 print_separator()
 
@@ -240,7 +279,38 @@ print_separator()
 print_step("Squad Analysis", "Evaluating current squad performance and identifying sell opportunities")
 with operation_timer("Squad analysis"):
     squad_recommendations_df = join_current_squad(token, league_id, live_predictions_df)
-display_dataframe(squad_recommendations_df, "⚽ Squad Analysis", max_rows=15)
+
+# Enhanced squad display
+squad_column_descriptions = {
+    'last_name': 'Player\nName',
+    'team_name': 'Team',
+    'mv': 'Current\nValue (€)',
+    'mv_change_yesterday': 'Yesterday\nChange (€)',
+    'predicted_mv_target': 'Predicted\nChange (€)',
+    's_11_prob': 'Start XI\nProb (%)'
+}
+
+display_dataframe(
+    squad_recommendations_df, 
+    "⚽ Your Squad Performance Analysis", 
+    max_rows=20,
+    show_insights=True,
+    column_descriptions=squad_column_descriptions
+)
+
+# Display comprehensive market summary
+print_separator()
+print_market_summary(market_recommendations_df, squad_recommendations_df, manager_budgets_df)
+
+# Display trading methodology and tips
+print_separator()
+print_prediction_methodology()
+
+print_separator()
+print_trading_tips()
+
+print_separator()
+print_data_freshness_info()
 
 # Send email with recommendations
 print_separator()
