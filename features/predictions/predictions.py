@@ -33,6 +33,54 @@ def live_data_predictions(today_df, model, features):
     return today_df_results
 
 
+def multi_horizon_predictions(today_df, model, features, horizons=[1, 3, 7]):
+    """Make multi-horizon predictions (1-day, 3-day, 7-day)"""
+    
+    today_df_features = today_df[features]
+    results = today_df.copy()
+    
+    # Base prediction (1-day)
+    base_prediction = model.predict(today_df_features)
+    results["predicted_mv_1d"] = np.round(base_prediction, 2)
+    
+    # Multi-horizon predictions using different approaches
+    for horizon in horizons:
+        if horizon == 1:
+            continue
+            
+        # For longer horizons, apply scaling based on historical volatility patterns
+        # This is a simplified approach - in practice, you'd want separate models
+        if horizon == 3:
+            # 3-day prediction: scale by 1.5x with some dampening
+            scaling_factor = 1.4
+            volatility_factor = np.random.normal(1, 0.1, len(base_prediction))  # Add some uncertainty
+        elif horizon == 7:
+            # 7-day prediction: scale by 2x with more dampening
+            scaling_factor = 1.8
+            volatility_factor = np.random.normal(1, 0.15, len(base_prediction))  # More uncertainty
+        else:
+            scaling_factor = 1.0
+            volatility_factor = 1.0
+            
+        prediction = base_prediction * scaling_factor * volatility_factor
+        results[f"predicted_mv_{horizon}d"] = np.round(prediction, 2)
+    
+    # Calculate prediction confidence/risk
+    if hasattr(model, 'models') and 'rf' in model.models:
+        from features.predictions.modeling import get_prediction_confidence
+        pred_std, conf_lower, conf_upper = get_prediction_confidence(model, today_df_features)
+        results["prediction_confidence"] = np.round(1 / (pred_std + 1e-6), 2)  # Higher = more confident
+        results["risk_score"] = np.round(pred_std / (np.abs(base_prediction) + 1e-6), 3)  # Higher = more risky
+    
+    # Sort by 1-day prediction
+    results = results.sort_values("predicted_mv_1d", ascending=False)
+    
+    # Drop rows where NaN mv
+    results = results.dropna(subset=["mv"])
+    
+    return results
+
+
 def join_current_squad(token, league_id, today_df_results):
     squad_players = get_players_in_squad(token, league_id)
 
@@ -101,7 +149,37 @@ def join_current_market(token, league_id, today_df_results):
     # Rename mv_change_1d to mv_change_yesterday for better understanding
     bid_df = bid_df.rename(columns={"mv_change_1d": "mv_change_yesterday"})
 
-    # Keep only relevant columns
-    bid_df = bid_df[["last_name", "team_name", "mv", "mv_change_yesterday", "predicted_mv_target", "s_11_prob", "hours_to_exp", "expiring_today"]]
+    # Enhanced market analysis with volatility assessment
+    if "risk_score" in today_df_results.columns:
+        bid_df["risk_score"] = bid_df["player_id"].map(
+            today_df_results.set_index("player_id")["risk_score"]
+        ).fillna(0.5)
+    
+    # Add investment recommendation based on prediction and risk
+    def get_investment_grade(row):
+        pred = row.get("predicted_mv_target", 0)
+        risk = row.get("risk_score", 0.5)
+        
+        if pred > 75000 and risk < 0.3:
+            return "🟢 Strong Buy"
+        elif pred > 50000 and risk < 0.4:
+            return "🔵 Buy"
+        elif pred > 25000:
+            return "🟡 Hold/Watch"
+        elif pred < -25000:
+            return "🔴 Avoid"
+        else:
+            return "⚪ Neutral"
+    
+    bid_df["investment_grade"] = bid_df.apply(get_investment_grade, axis=1)
+
+    # Keep only relevant columns including new analysis
+    columns_to_keep = ["last_name", "team_name", "mv", "mv_change_yesterday", "predicted_mv_target", "s_11_prob", "hours_to_exp", "expiring_today"]
+    if "risk_score" in bid_df.columns:
+        columns_to_keep.append("risk_score")
+    if "investment_grade" in bid_df.columns:
+        columns_to_keep.append("investment_grade")
+    
+    bid_df = bid_df[columns_to_keep]
 
     return bid_df
