@@ -47,6 +47,43 @@ def preprocess_player_data(df):
     ## League-wide market context
     df["market_divergence"] = (df["mv"] / df.groupby("md")["mv"].transform("mean")).rolling(3).mean()
 
+    # Enhanced features for better predictions
+    # Player form indicators
+    df["points_ma_3"] = df.groupby("player_id")["p"].rolling(3).mean().reset_index(0,drop=True)
+    df["points_ma_5"] = df.groupby("player_id")["p"].rolling(5).mean().reset_index(0,drop=True)
+    df["points_trend"] = df.groupby("player_id")["p"].pct_change(periods=3, fill_method=None).replace([np.inf, -np.inf], 0).fillna(0)
+    
+    # Minutes played consistency
+    df["mp_ma_3"] = df.groupby("player_id")["mp"].rolling(3).mean().reset_index(0,drop=True)
+    df["mp_consistency"] = 1 - (df.groupby("player_id")["mp"].rolling(3).std().reset_index(0,drop=True) / (df["mp_ma_3"] + 1e-8))
+    
+    # Points per minute efficiency
+    df["ppm_ma_3"] = df.groupby("player_id")["ppm"].rolling(3).mean().reset_index(0,drop=True)
+    df["ppm_trend"] = df.groupby("player_id")["ppm"].pct_change(periods=3, fill_method=None).replace([np.inf, -np.inf], 0).fillna(0)
+    
+    # Match outcome influence
+    df["win_rate_3"] = df.groupby("player_id")["won"].rolling(3).mean().reset_index(0,drop=True)
+    df["recent_form"] = (df["points_ma_3"] * 0.4 + df["mp_consistency"] * 0.3 + df["win_rate_3"] * 0.3).fillna(0)
+    
+    # Position-based features
+    position_stats = df.groupby("position").agg({
+        "p": ["mean", "std"],
+        "mv": ["mean", "std"],
+        "ppm": ["mean", "std"]
+    }).round(2)
+    position_stats.columns = ["pos_p_mean", "pos_p_std", "pos_mv_mean", "pos_mv_std", "pos_ppm_mean", "pos_ppm_std"]
+    df = df.merge(position_stats, left_on="position", right_index=True, how="left")
+    
+    # Player performance relative to position
+    df["p_vs_position"] = (df["p"] - df["pos_p_mean"]) / (df["pos_p_std"] + 1e-8)
+    df["mv_vs_position"] = (df["mv"] - df["pos_mv_mean"]) / (df["pos_mv_std"] + 1e-8)
+    df["ppm_vs_position"] = (df["ppm"] - df["pos_ppm_mean"]) / (df["pos_ppm_std"] + 1e-8)
+    
+    # Market value momentum indicators
+    df["mv_momentum_short"] = df.groupby("player_id")["mv"].pct_change(periods=2, fill_method=None).replace([np.inf, -np.inf], 0).fillna(0)
+    df["mv_momentum_long"] = df.groupby("player_id")["mv"].pct_change(periods=5, fill_method=None).replace([np.inf, -np.inf], 0).fillna(0)
+    df["mv_acceleration"] = df["mv_momentum_short"] - df["mv_momentum_long"]
+
     # 5. Clip outliers in mv_target
     Q1 = df["mv_target"].quantile(0.25)
     Q3 = df["mv_target"].quantile(0.75)
@@ -63,7 +100,23 @@ def preprocess_player_data(df):
         "mv_vol_3d": 0,
         "p": 0,
         "ppm": 0,
-        "won": -1
+        "mp": 0,
+        "won": -1,
+        "points_ma_3": 0,
+        "points_ma_5": 0,
+        "points_trend": 0,
+        "mp_ma_3": 0,
+        "mp_consistency": 0,
+        "ppm_ma_3": 0,
+        "ppm_trend": 0,
+        "win_rate_3": 0,
+        "recent_form": 0,
+        "p_vs_position": 0,
+        "mv_vs_position": 0,
+        "ppm_vs_position": 0,
+        "mv_momentum_short": 0,
+        "mv_momentum_long": 0,
+        "mv_acceleration": 0
     })
 
     # 7. Cutout todays values and store them

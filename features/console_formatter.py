@@ -118,29 +118,59 @@ def display_dataframe(df, title=None, max_rows=None):
     else:
         print_info(f"Total: {total_rows} rows")
 
-def print_model_evaluation(signs_percent, rmse, mae, r2):
-    """Print model evaluation metrics in a formatted way"""
+def print_model_evaluation(signs_percent, rmse, mae, r2, mape=None, small_acc=None, medium_acc=None, large_acc=None):
+    """Print enhanced model evaluation metrics in a formatted way"""
     print_header("🤖 Model Performance")
     
     table = Table(show_header=True, header_style="bold magenta")
-    table.add_column("Metric", style="cyan", width=20)
+    table.add_column("Metric", style="cyan", width=25)
     table.add_column("Value", style="white", width=15)
     table.add_column("Status", style="white", width=15)
     
     # Signs correct
-    signs_color = "green" if signs_percent > 50 else "red"
-    signs_status = "Good" if signs_percent > 50 else "Needs improvement"
+    signs_color = "green" if signs_percent > 55 else "yellow" if signs_percent > 50 else "red"
+    signs_status = "Excellent" if signs_percent > 60 else "Good" if signs_percent > 55 else "Fair" if signs_percent > 50 else "Needs improvement"
     table.add_row(
-        "Signs Correct", 
+        "Overall Signs Correct", 
         f"[{signs_color}]{signs_percent:.2f}%[/{signs_color}]", 
         f"[{signs_color}]{signs_status}[/{signs_color}]"
     )
+    
+    # Accuracy by change magnitude
+    if small_acc is not None:
+        small_color = "green" if small_acc > 50 else "red"
+        table.add_row(
+            "Small Changes (<50k)", 
+            f"[{small_color}]{small_acc:.1f}%[/{small_color}]", 
+            "[dim]Direction accuracy[/dim]"
+        )
+    
+    if medium_acc is not None:
+        medium_color = "green" if medium_acc > 50 else "red"
+        table.add_row(
+            "Medium Changes (50-200k)", 
+            f"[{medium_color}]{medium_acc:.1f}%[/{medium_color}]", 
+            "[dim]Direction accuracy[/dim]"
+        )
+    
+    if large_acc is not None:
+        large_color = "green" if large_acc > 50 else "red"
+        table.add_row(
+            "Large Changes (>200k)", 
+            f"[{large_color}]{large_acc:.1f}%[/{large_color}]", 
+            "[dim]Direction accuracy[/dim]"
+        )
     
     # RMSE
     table.add_row("RMSE", f"{rmse:.2f}", "[dim]Lower is better[/dim]")
     
     # MAE
     table.add_row("MAE", f"{mae:.2f}", "[dim]Lower is better[/dim]")
+    
+    # MAPE
+    if mape is not None:
+        mape_color = "green" if mape < 20 else "yellow" if mape < 40 else "red"
+        table.add_row("MAPE", f"[{mape_color}]{mape:.2f}%[/{mape_color}]", "[dim]Lower is better[/dim]")
     
     # R²
     r2_color = "green" if r2 > 0.3 else "yellow" if r2 > 0.1 else "red"
@@ -150,6 +180,34 @@ def print_model_evaluation(signs_percent, rmse, mae, r2):
         f"[{r2_color}]{r2:.3f}[/{r2_color}]", 
         f"[{r2_color}]{r2_status}[/{r2_color}]"
     )
+    
+    console.print(table)
+
+
+def print_feature_importance(importance_df, top_n=15):
+    """Print feature importance in a formatted table"""
+    print_header("🎯 Feature Importance (Top Features)")
+    
+    table = Table(show_header=True, header_style="bold magenta")
+    table.add_column("Rank", style="cyan", width=6)
+    table.add_column("Feature", style="white", width=25)
+    table.add_column("Importance", style="green", width=12)
+    table.add_column("Bar", style="green", width=20)
+    
+    top_features = importance_df.head(top_n)
+    max_importance = top_features['importance'].max()
+    
+    for idx, (_, row) in enumerate(top_features.iterrows(), 1):
+        # Create a simple bar visualization
+        bar_length = int((row['importance'] / max_importance) * 20)
+        bar = "█" * bar_length + "░" * (20 - bar_length)
+        
+        table.add_row(
+            str(idx),
+            row['feature'],
+            f"{row['importance']:.4f}",
+            bar
+        )
     
     console.print(table)
 
