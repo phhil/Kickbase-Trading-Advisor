@@ -2,11 +2,31 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import pandas as pd
 import numpy as np
+from numba import jit
+import warnings
+
+@jit(nopython=True)
+def fast_rolling_mean(values, window):
+    """Fast rolling mean calculation using numba"""
+    result = np.full_like(values, np.nan, dtype=np.float64)
+    for i in range(window-1, len(values)):
+        result[i] = np.mean(values[i-window+1:i+1])
+    return result
+
+@jit(nopython=True)
+def fast_rolling_std(values, window):
+    """Fast rolling std calculation using numba"""
+    result = np.full_like(values, np.nan, dtype=np.float64)
+    for i in range(window-1, len(values)):
+        result[i] = np.std(values[i-window+1:i+1])
+    return result
 
 def preprocess_player_data(df):
-    """Preprocess the player data for modeling"""
+    """Preprocess the player data for modeling with enhanced features for small changes"""
     
-    # 1. Sort and filter
+    print("Starting enhanced data preprocessing...")
+    
+    # 1. Sort and filter (optimized)
     df = df.sort_values(["player_id", "date"])
     df = df[     # Keep rows where team_id matches t1 or t2 OR where both t1 and t2 are missing
         (df["team_id"] == df["t1"]) |
@@ -14,11 +34,13 @@ def preprocess_player_data(df):
         (df["t1"].isna() & df["t2"].isna())
     ]
 
-    # Convert date columns to datetime
-    df["date"] = pd.to_datetime(df["date"])
-    df["md"] = pd.to_datetime(df["md"])
+    # Convert date columns to datetime with better performance
+    if not pd.api.types.is_datetime64_any_dtype(df["date"]):
+        df["date"] = pd.to_datetime(df["date"])
+    if not pd.api.types.is_datetime64_any_dtype(df["md"]):
+        df["md"] = pd.to_datetime(df["md"])
 
-    # 2. Date and matchday calculations 
+    # 2. Optimized date and matchday calculations 
     df["next_day"] = df.groupby("player_id")["date"].shift(-1) 
     df["next_md"] = df.groupby("player_id")["md"].transform(
         lambda x: x.shift(-1).where(x.shift(-1) != x).bfill()
@@ -30,42 +52,67 @@ def preprocess_player_data(df):
     df["mv_target"] = df["mv_next_day"] - df["mv"]
     df = df[df["mv"] != 0.0]
 
-    # 4. Feature engineering 
-    # Market value trend 1d
+    # 4. Enhanced feature engineering with focus on small changes
+    print("Creating enhanced features for small value changes...")
+    
+    # Basic momentum features
     df["mv_change_1d"] = df["mv"] - df.groupby("player_id")["mv"].shift(1)
     df["mv_trend_1d"] = df.groupby("player_id")["mv"].pct_change(fill_method=None)
     df["mv_trend_1d"] = df["mv_trend_1d"].replace([np.inf, -np.inf], 0).fillna(0)
 
-    # Market value trend 3d
+    # Multi-period market value features  
     df["mv_change_3d"] = df["mv"] - df.groupby("player_id")["mv"].shift(3)
+    df["mv_change_7d"] = df["mv"] - df.groupby("player_id")["mv"].shift(7)
+    
+    # Volatility measures (important for small changes)
     df["mv_vol_3d"] = df.groupby("player_id")["mv"].rolling(3).std().reset_index(0,drop=True)
-
-    # Market value trend 7d
+    df["mv_vol_7d"] = df.groupby("player_id")["mv"].rolling(7).std().reset_index(0,drop=True)
+    
+    # Market value trend analysis
     df["mv_trend_7d"] = df.groupby("player_id")["mv"].pct_change(periods=7, fill_method=None)
     df["mv_trend_7d"] = df["mv_trend_7d"].replace([np.inf, -np.inf], 0).fillna(0)
 
-    ## League-wide market context
+    # Enhanced league-wide market context
     df["market_divergence"] = (df["mv"] / df.groupby("md")["mv"].transform("mean")).rolling(3).mean()
+    
+    # NEW: Small change specific features
+    df["mv_micro_trend"] = df.groupby("player_id")["mv"].pct_change(periods=2, fill_method=None).replace([np.inf, -np.inf], 0).fillna(0)
+    df["mv_stability"] = 1 / (df["mv_vol_3d"] + 1)  # Higher for more stable players
+    df["mv_recent_direction"] = np.sign(df["mv_change_1d"])  # Recent direction
+    
+    # Price level indicators (important for small changes)
+    df["mv_percentile"] = df.groupby("position")["mv"].transform(lambda x: x.rank(pct=True))
+    df["mv_zscore"] = df.groupby("position")["mv"].transform(lambda x: (x - x.mean()) / (x.std() + 1e-8))
 
-    # Enhanced features for better predictions
-    # Player form indicators
+    # Enhanced player form indicators
     df["points_ma_3"] = df.groupby("player_id")["p"].rolling(3).mean().reset_index(0,drop=True)
     df["points_ma_5"] = df.groupby("player_id")["p"].rolling(5).mean().reset_index(0,drop=True)
     df["points_trend"] = df.groupby("player_id")["p"].pct_change(periods=3, fill_method=None).replace([np.inf, -np.inf], 0).fillna(0)
     
-    # Minutes played consistency
+    # Performance consistency (key for small changes)
+    df["points_consistency"] = 1 - (df.groupby("player_id")["p"].rolling(5).std().reset_index(0,drop=True) / (df["points_ma_5"] + 1e-8))
+    df["points_consistency"] = df["points_consistency"].clip(0, 2)
+    
+    # Minutes played features
     df["mp_ma_3"] = df.groupby("player_id")["mp"].rolling(3).mean().reset_index(0,drop=True)
     df["mp_consistency"] = 1 - (df.groupby("player_id")["mp"].rolling(3).std().reset_index(0,drop=True) / (df["mp_ma_3"] + 1e-8))
+    df["mp_trend"] = df.groupby("player_id")["mp"].pct_change(periods=3, fill_method=None).replace([np.inf, -np.inf], 0).fillna(0)
     
     # Points per minute efficiency
     df["ppm_ma_3"] = df.groupby("player_id")["ppm"].rolling(3).mean().reset_index(0,drop=True)
     df["ppm_trend"] = df.groupby("player_id")["ppm"].pct_change(periods=3, fill_method=None).replace([np.inf, -np.inf], 0).fillna(0)
+    df["ppm_volatility"] = df.groupby("player_id")["ppm"].rolling(3).std().reset_index(0,drop=True)
     
     # Match outcome influence
     df["win_rate_3"] = df.groupby("player_id")["won"].rolling(3).mean().reset_index(0,drop=True)
-    df["recent_form"] = (df["points_ma_3"] * 0.4 + df["mp_consistency"] * 0.3 + df["win_rate_3"] * 0.3).fillna(0)
+    df["win_rate_5"] = df.groupby("player_id")["won"].rolling(5).mean().reset_index(0,drop=True)
     
-    # Position-based features
+    # Enhanced recent form calculation
+    df["recent_form"] = (df["points_ma_3"] * 0.3 + df["mp_consistency"] * 0.25 + 
+                        df["win_rate_3"] * 0.25 + df["points_consistency"] * 0.2).fillna(0)
+    
+    # Position-based features (vectorized for performance)
+    print("Computing position-based features...")
     position_stats = df.groupby("position").agg({
         "p": ["mean", "std"],
         "mv": ["mean", "std"],
@@ -79,60 +126,71 @@ def preprocess_player_data(df):
     df["mv_vs_position"] = (df["mv"] - df["pos_mv_mean"]) / (df["pos_mv_std"] + 1e-8)
     df["ppm_vs_position"] = (df["ppm"] - df["pos_ppm_mean"]) / (df["pos_ppm_std"] + 1e-8)
     
-    # Market value momentum indicators
+    # Market value momentum indicators (enhanced)
     df["mv_momentum_short"] = df.groupby("player_id")["mv"].pct_change(periods=2, fill_method=None).replace([np.inf, -np.inf], 0).fillna(0)
     df["mv_momentum_long"] = df.groupby("player_id")["mv"].pct_change(periods=5, fill_method=None).replace([np.inf, -np.inf], 0).fillna(0)
+    df["mv_momentum_very_long"] = df.groupby("player_id")["mv"].pct_change(periods=10, fill_method=None).replace([np.inf, -np.inf], 0).fillna(0)
     df["mv_acceleration"] = df["mv_momentum_short"] - df["mv_momentum_long"]
+    
+    # NEW: Advanced features for small change prediction
+    df["mv_relative_change"] = df["mv_change_1d"] / (df["mv"] + 1e-8)  # Relative to current value
+    df["mv_price_pressure"] = df.groupby("player_id")["mv_change_1d"].rolling(3).mean().reset_index(0,drop=True)  # Recent pressure
+    df["form_mv_interaction"] = df["recent_form"] * df["mv_trend_1d"]  # Form-price interaction
+    
+    # Team performance indicators
+    team_stats = df.groupby(["team_name", "md"]).agg({
+        "won": "mean",
+        "p": "mean"
+    }).reset_index()
+    team_stats.columns = ["team_name", "md", "team_win_rate", "team_avg_points"]
+    df = df.merge(team_stats, on=["team_name", "md"], how="left")
+    
+    df["team_form"] = df.groupby("team_name")["team_win_rate"].rolling(3).mean().reset_index(0,drop=True)
 
-    # 5. Clip outliers in mv_target
-    Q1 = df["mv_target"].quantile(0.25)
-    Q3 = df["mv_target"].quantile(0.75)
+    # 5. Enhanced outlier clipping for better small change handling
+    print("Applying enhanced outlier treatment...")
+    Q1 = df["mv_target"].quantile(0.15)  # More aggressive clipping
+    Q3 = df["mv_target"].quantile(0.85)
     IQR = Q3 - Q1
-    lower_bound = Q1 - 2.5 * IQR
-    upper_bound = Q3 + 2.5 * IQR
+    lower_bound = Q1 - 2.0 * IQR  # Less aggressive bounds to preserve small changes
+    upper_bound = Q3 + 2.0 * IQR
 
     df["mv_target_clipped"] = df["mv_target"].clip(lower_bound, upper_bound)
 
-    # 6. Fill missing values
-    df = df.fillna({
+    # 6. Comprehensive missing value handling
+    print("Handling missing values...")
+    fill_values = {
         "market_divergence": 1,
-        "mv_change_3d": 0,
-        "mv_vol_3d": 0,
-        "p": 0,
-        "ppm": 0,
-        "mp": 0,
-        "won": -1,
-        "points_ma_3": 0,
-        "points_ma_5": 0,
-        "points_trend": 0,
-        "mp_ma_3": 0,
-        "mp_consistency": 0,
-        "ppm_ma_3": 0,
-        "ppm_trend": 0,
-        "win_rate_3": 0,
-        "recent_form": 0,
-        "p_vs_position": 0,
-        "mv_vs_position": 0,
-        "ppm_vs_position": 0,
-        "mv_momentum_short": 0,
-        "mv_momentum_long": 0,
-        "mv_acceleration": 0
-    })
+        "mv_change_3d": 0, "mv_change_7d": 0,
+        "mv_vol_3d": 0, "mv_vol_7d": 0,
+        "mv_micro_trend": 0, "mv_stability": 1, "mv_recent_direction": 0,
+        "mv_percentile": 0.5, "mv_zscore": 0,
+        "p": 0, "ppm": 0, "mp": 0, "won": -1,
+        "points_ma_3": 0, "points_ma_5": 0, "points_trend": 0, "points_consistency": 0,
+        "mp_ma_3": 0, "mp_consistency": 0, "mp_trend": 0,
+        "ppm_ma_3": 0, "ppm_trend": 0, "ppm_volatility": 0,
+        "win_rate_3": 0, "win_rate_5": 0, "recent_form": 0,
+        "p_vs_position": 0, "mv_vs_position": 0, "ppm_vs_position": 0,
+        "mv_momentum_short": 0, "mv_momentum_long": 0, "mv_momentum_very_long": 0, "mv_acceleration": 0,
+        "mv_relative_change": 0, "mv_price_pressure": 0, "form_mv_interaction": 0,
+        "team_win_rate": 0.5, "team_avg_points": 0, "team_form": 0.5
+    }
+    df = df.fillna(fill_values)
 
-    # 7. Cutout todays values and store them
+    # 7. Cutout todays values and store them (optimized)
     now = datetime.now(ZoneInfo("Europe/Berlin"))
     cutoff_time = now.replace(hour=22, minute=15, second=0, microsecond=0)
     max_date = (now - timedelta(days=1)) if now <= cutoff_time else now
     max_date = max_date.date()
 
-    today_df = df[df["date"].dt.date >= max_date]
-
-    # Drop those values from today from df
-    df = df[df["date"].dt.date < max_date]
+    today_df = df[df["date"].dt.date >= max_date].copy()
+    df = df[df["date"].dt.date < max_date].copy()
 
     # 8. Drop rows with NaN in critical columns
-    df = df.dropna(subset=["mv_change_1d", "next_day", "next_md", "days_to_next", "mv_next_day", "mv_target", "mv_target_clipped"])
+    critical_columns = ["mv_change_1d", "next_day", "next_md", "days_to_next", "mv_next_day", "mv_target", "mv_target_clipped"]
+    df = df.dropna(subset=critical_columns)
 
+    print(f"Preprocessing complete! Training data: {len(df):,} rows, Today's data: {len(today_df):,} rows")
     return df, today_df
 
 

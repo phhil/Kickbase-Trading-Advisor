@@ -43,15 +43,20 @@ features = [
     # Original features
     "p", "mv", "days_to_next", 
     "mv_change_1d", "mv_trend_1d", 
-    "mv_change_3d", "mv_vol_3d",
+    "mv_change_3d", "mv_change_7d", "mv_vol_3d", "mv_vol_7d",
     "mv_trend_7d", "market_divergence",
     # Enhanced features for better predictions
-    "points_ma_3", "points_ma_5", "points_trend",
-    "mp_ma_3", "mp_consistency",
-    "ppm_ma_3", "ppm_trend",
-    "win_rate_3", "recent_form",
+    "points_ma_3", "points_ma_5", "points_trend", "points_consistency",
+    "mp_ma_3", "mp_consistency", "mp_trend",
+    "ppm_ma_3", "ppm_trend", "ppm_volatility",
+    "win_rate_3", "win_rate_5", "recent_form",
     "p_vs_position", "mv_vs_position", "ppm_vs_position",
-    "mv_momentum_short", "mv_momentum_long", "mv_acceleration"
+    "mv_momentum_short", "mv_momentum_long", "mv_momentum_very_long", "mv_acceleration",
+    # NEW: Small change specific features
+    "mv_micro_trend", "mv_stability", "mv_recent_direction",
+    "mv_percentile", "mv_zscore",
+    "mv_relative_change", "mv_price_pressure", "form_mv_interaction",
+    "team_win_rate", "team_avg_points", "team_form"
 ]
 
 # what column to learn and predict on
