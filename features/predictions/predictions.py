@@ -36,7 +36,8 @@ def live_data_predictions(today_df, model, features):
 def multi_horizon_predictions(today_df, model, features, horizons=[1, 3, 7]):
     """Make multi-horizon predictions (1-day, 3-day, 7-day)"""
     
-    today_df_features = today_df[features]
+    # Fill NaN values in features before prediction
+    today_df_features = today_df[features].fillna(0)
     results = today_df.copy()
     
     # Base prediction (1-day)
@@ -53,11 +54,12 @@ def multi_horizon_predictions(today_df, model, features, horizons=[1, 3, 7]):
         if horizon == 3:
             # 3-day prediction: scale by 1.5x with some dampening
             scaling_factor = 1.4
-            volatility_factor = np.random.normal(1, 0.1, len(base_prediction))  # Add some uncertainty
+            # Use deterministic approach instead of random for consistency
+            volatility_factor = 1.0 + 0.1 * np.sin(np.arange(len(base_prediction)))  # Deterministic variation
         elif horizon == 7:
             # 7-day prediction: scale by 2x with more dampening
             scaling_factor = 1.8
-            volatility_factor = np.random.normal(1, 0.15, len(base_prediction))  # More uncertainty
+            volatility_factor = 1.0 + 0.15 * np.cos(np.arange(len(base_prediction)))  # Deterministic variation
         else:
             scaling_factor = 1.0
             volatility_factor = 1.0
@@ -67,10 +69,15 @@ def multi_horizon_predictions(today_df, model, features, horizons=[1, 3, 7]):
     
     # Calculate prediction confidence/risk
     if hasattr(model, 'models') and 'rf' in model.models:
-        from features.predictions.modeling import get_prediction_confidence
-        pred_std, conf_lower, conf_upper = get_prediction_confidence(model, today_df_features)
-        results["prediction_confidence"] = np.round(1 / (pred_std + 1e-6), 2)  # Higher = more confident
-        results["risk_score"] = np.round(pred_std / (np.abs(base_prediction) + 1e-6), 3)  # Higher = more risky
+        try:
+            from features.predictions.modeling import get_prediction_confidence
+            pred_std, conf_lower, conf_upper = get_prediction_confidence(model, today_df_features)
+            results["prediction_confidence"] = np.round(1 / (pred_std + 1e-6), 2)  # Higher = more confident
+            results["risk_score"] = np.round(pred_std / (np.abs(base_prediction) + 1e-6), 3)  # Higher = more risky
+        except Exception:
+            # Fallback if confidence calculation fails
+            results["prediction_confidence"] = 1.0
+            results["risk_score"] = 0.5
     
     # Sort by 1-day prediction
     results = results.sort_values("predicted_mv_1d", ascending=False)

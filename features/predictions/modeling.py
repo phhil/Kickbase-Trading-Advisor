@@ -36,8 +36,11 @@ class EnsemblePredictor:
         
     def fit(self, X_train, y_train):
         """Train all models in the ensemble"""
+        # Fill any NaN values before training
+        X_train_filled = X_train.fillna(0)
+        
         for name, model in self.models.items():
-            model.fit(X_train, y_train)
+            model.fit(X_train_filled, y_train)
         
         # Calculate feature importance from Random Forest
         self.feature_importance_ = pd.DataFrame({
@@ -49,10 +52,13 @@ class EnsemblePredictor:
     
     def predict(self, X):
         """Make predictions using weighted ensemble"""
-        predictions = np.zeros(len(X))
+        # Fill any remaining NaN values before prediction
+        X_filled = X.fillna(0)
+        
+        predictions = np.zeros(len(X_filled))
         
         for name, model in self.models.items():
-            pred = model.predict(X)
+            pred = model.predict(X_filled)
             predictions += self.weights[name] * pred
             
         return predictions

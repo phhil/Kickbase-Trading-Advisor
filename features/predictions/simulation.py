@@ -99,10 +99,37 @@ class TradingSimulator:
     def get_performance_metrics(self) -> Dict[str, float]:
         """Calculate comprehensive performance metrics"""
         
-        if len(self.portfolio_values) < 2:
-            return {}
+        # If no portfolio tracking has been done, return basic metrics
+        if len(self.portfolio_values) < 1:
+            # Calculate based on transaction history only
+            total_trades = len([t for t in self.transaction_history if t['action'] == 'SELL'])
+            profitable_trades = [t for t in self.transaction_history if t['action'] == 'SELL' and t.get('profit', 0) > 0]
+            win_rate = len(profitable_trades) / max(total_trades, 1) * 100
+            avg_profit = np.mean([t.get('profit', 0) for t in self.transaction_history if t['action'] == 'SELL']) if total_trades > 0 else 0
+            avg_hold_days = np.mean([t.get('hold_days', 0) for t in self.transaction_history if t['action'] == 'SELL']) if total_trades > 0 else 0
+            
+            total_return = (self.current_budget - self.initial_budget) / self.initial_budget * 100
+            
+            return {
+                'total_return_pct': total_return,
+                'total_return_abs': self.current_budget - self.initial_budget,
+                'final_value': self.current_budget,
+                'volatility_pct': 0.0,
+                'max_drawdown_pct': 0.0,
+                'sharpe_ratio': 0.0,
+                'total_trades': total_trades,
+                'win_rate_pct': win_rate,
+                'avg_profit': avg_profit,
+                'avg_hold_days': avg_hold_days,
+                'current_budget': self.current_budget,
+                'portfolio_size': len(self.portfolio)
+            }
         
         values = np.array(self.portfolio_values)
+        
+        if len(values) < 2:
+            return {}
+        
         returns = np.diff(values) / values[:-1]
         
         # Basic metrics
@@ -122,14 +149,14 @@ class TradingSimulator:
         total_trades = len([t for t in self.transaction_history if t['action'] == 'SELL'])
         win_rate = len(profitable_trades) / max(total_trades, 1) * 100
         
-        avg_profit = np.mean([t.get('profit', 0) for t in self.transaction_history if t['action'] == 'SELL'])
-        avg_hold_days = np.mean([t.get('hold_days', 0) for t in self.transaction_history if t['action'] == 'SELL'])
-        
+        avg_profit = np.mean([t.get('profit', 0) for t in self.transaction_history if t['action'] == 'SELL']) if total_trades > 0 else 0
+        avg_hold_days = np.mean([t.get('hold_days', 0) for t in self.transaction_history if t['action'] == 'SELL']) if total_trades > 0 else 0
+
         return {
             'total_return_pct': total_return_pct,
             'total_return_abs': values[-1] - self.initial_budget,
             'final_value': values[-1],
-            'volatility': volatility * 100,
+            'volatility_pct': volatility * 100,
             'max_drawdown_pct': max_drawdown * 100,
             'sharpe_ratio': sharpe_ratio,
             'total_trades': total_trades,
