@@ -70,4 +70,3 @@ display_dataframe(manager_budgets_df, "💰 Manager Budgets", max_rows=20)
 
 print_separator()
 print_success("Budget analysis complete! 🎉")
-print_info("Manager budgets have been calculated and displayed above.")
