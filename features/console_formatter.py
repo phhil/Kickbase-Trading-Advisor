@@ -91,10 +91,14 @@ def _get_optimal_column_widths(df):
         # Special handling for specific columns
         if col.lower() in ['last_name', 'first_name']:
             widths[col] = min(optimal_width, 15)
+        elif col.lower() in ['user']:
+            widths[col] = 12
         elif col.lower() in ['team_name']:
             widths[col] = min(optimal_width, 12)
         elif col.lower() in ['mv', 'predicted_mv_target', 'predicted_mv_1d', 'predicted_mv_3d', 'predicted_mv_7d']:
             widths[col] = 12
+        elif col.lower() in ['budget', 'team value', 'max negative', 'available budget']:
+            widths[col] = 14
         elif col.lower() in ['position']:
             widths[col] = 6
         elif col.lower() in ['investment_grade']:
@@ -133,7 +137,9 @@ def _get_enhanced_column_header(col, column_descriptions=None):
         'prediction_confidence': 'Confidence\nScore',
         'investment_grade': 'Investment\nRecommendation',
         'budget': 'Budget\n(Estimated)',
-        'team value': 'Team Value\n(Total)'
+        'team value': 'Team Value\n(Total)',
+        'max negative': 'Max Negative\nBudget',
+        'available budget': 'Available\nBudget'
     }
     
     return headers.get(col.lower(), col.replace('_', ' ').title())
@@ -147,7 +153,8 @@ def _format_cell_value(col, value):
     
     # Currency formatting
     if col_lower in ['budget', 'team value', 'mv', 'predicted_mv_target', 'predicted_mv_1d', 
-                     'predicted_mv_3d', 'predicted_mv_7d', 'mv_change_yesterday', 'mv_change_1d']:
+                     'predicted_mv_3d', 'predicted_mv_7d', 'mv_change_yesterday', 'mv_change_1d',
+                     'max negative', 'available budget']:
         return format_currency(value)
     
     # Percentage formatting
