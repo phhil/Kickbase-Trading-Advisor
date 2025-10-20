@@ -72,7 +72,7 @@
   
   <strong>Budget-Only Analysis:</strong> For faster execution (30 seconds vs 5-10 minutes), use the "Budget Analysis Only" workflow in GitHub Actions, or run <code>budgets_only.py</code> locally. This provides comprehensive manager budget analysis without machine learning predictions or trading simulations.
   
-  <strong>Local Usage:</strong> The tool can also be used locally without GitHub Actions: for this, you need to have Python installed along with the packages listed in <code>requirements.txt</code>. Create a <code>.env</code> file in the root folder with the same credentials you used in your secrets. You can then execute the main file <code>daily_predictions.py</code> or <code>budgets_only.py</code>. If you have any further questions or encounter issues, please use the "Issues" tab at the top of the repository or contact me via the email listed on my GitHub profile.
+  <strong>Local Usage:</strong> The tool can also be used locally without GitHub Actions: for this, you need to have Python installed along with the required packages. Create a <code>.env</code> file in the root folder with the same credentials you used in your secrets. Install dependencies with <code>pip install -r requirements.txt</code> for the full prediction tool (<code>daily_predictions.py</code>), or use <code>pip install -r requirements-budgets.txt</code> for a lightweight installation to run only <code>budgets_only.py</code>. If you have any further questions or encounter issues, please use the "Issues" tab at the top of the repository or contact me via the email listed on my GitHub profile.
 </div>
 
 <h2 align="center">Future Work & Ideas</h2>
